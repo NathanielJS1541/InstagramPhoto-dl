@@ -37,7 +37,7 @@ if not Path(args.output).is_dir():
 elif not Path(args.cookieFile).exists():
     raise FileNotFoundError("[ERR] The cookie file specified does not exist.")
 elif args.output == "./":
-    print("[INFO] Outputting to python scrip directory ./")
+    print("[INFO] Outputting to python script directory ./")
 
 # Target URL
 # jsonURL = 'https://www.instagram.com/p/CPB9WEwh-G8/'
