@@ -38,8 +38,9 @@ args = parser.parse_args()
 # Test input arguments
 if not Path(args.output).is_dir():
     raise FileNotFoundError("[ERR] The output folder specified does not exist.")
-elif not Path(args.cookieFile).exists():
-    raise FileNotFoundError("[ERR] The cookie file specified does not exist.")
+elif args.cookieFile:
+    if not Path(args.cookieFile).exists():
+        raise FileNotFoundError("[ERR] The cookie file specified does not exist.")
 elif args.output == "./":
     print("[INFO] Outputting to python script directory ./")
 
