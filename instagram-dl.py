@@ -14,7 +14,11 @@ def check_status_code(status):
         raise ConnectionRefusedError("[ERR] The requested URL could not be accessed. Maybe you need to log in or "
                                      "don't have permission to view that page?")
     elif status == 200:
+        # Specific success case
         print("[INFO] Access to the page was granted. Continuing.")
+    elif 200 < status < 300:
+        # Generic Success Case
+        print("[INFO] Site returned success code", status, "Continuing.")
     else:
         print("[WARN] requests.get returned unknown status code. Continuing anyway.")
 
@@ -40,7 +44,6 @@ elif args.output == "./":
     print("[INFO] Outputting to python script directory ./")
 
 # Target URL
-# jsonURL = 'https://www.instagram.com/p/CPB9WEwh-G8/'
 jsonURL = args.URL + '?__a=1'  # Update the URL to get the JSON manifest
 if args.verbose:
     print("[VERBOSE] JSON URL:", jsonURL)
