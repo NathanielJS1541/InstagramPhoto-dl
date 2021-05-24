@@ -3,7 +3,7 @@ The purpose of this python script is to offer a method to download photos from i
 that `youtube-dl` works. This is intended to be installed in Termux on a phone with my custom 
 [termux-url-opener](https://github.com/NathanielJS1541/Termux_youtube-dl_Configs.git) script to launch this script with 
 the correct arguments.
-#### *****Disclaimer:** I don't know how to program in Python. This is most likely the worst possible way to do this.***
+#### *****A note of warning:** Using the login cookies from your instagram account and downloading large numbers of posts can get your account suspended as instagram flags this as "suspicious activity". I've been through two accounts so far testing this script.***
 ## Prerequisites
 In order to run this script you need the following:
 - [Python 3](https://www.python.org/downloads/) (I don't know whether older Python 3 versions will work, I tested with 
