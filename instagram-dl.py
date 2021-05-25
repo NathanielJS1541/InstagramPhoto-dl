@@ -34,8 +34,9 @@ def check_status_code(status):
 def download_json_manifest(json_url):
     try:
         # Try loading JSON without logging in
-        check_status_code(requests.get(json_url).status_code)
-        json_dict = json.loads(requests.get(json_url).content)
+        raw_data = requests.get(json_url)
+        check_status_code(raw_data.status_code)
+        json_dict = json.loads(raw_data.content)
         print("[INFO] Access granted without login. Continuing.")
     except ConnectionRefusedError:
         # Import cookies to avoid the need to login and load JSON
@@ -43,15 +44,16 @@ def download_json_manifest(json_url):
             print("[INFO] Login required. Loading cookie file.")
             cookies_file = http.cookiejar.MozillaCookieJar(args.cookieFile)
             cookies_file.load()
-            check_status_code(requests.get(json_url, cookies=cookies_file).status_code)
-            json_dict = json.loads(requests.get(json_url, cookies=cookies_file).content)
+            raw_data = requests.get(json_url, cookies=cookies_file)
+            check_status_code(raw_data.status_code)
+            json_dict = json.loads(raw_data.content)
         else:
             raise
     return json_dict
 
 
 def check_for_profile_url(url):
-    test_json = url + '?__a=1'
+    test_json = url + "?__a=1"
     test_json = download_json_manifest(test_json)
     user = test_json['graphql']['user']['username']
     if "www.instagram.com/" + user in url:
@@ -154,23 +156,32 @@ def download_post(post_url):
             print("[VERBOSE] Downloading from:", unique_urls[i])
         if not Path(output_file).exists():
             wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
+            print()
         else:
             print(f"[WARN] {output_file} already exists. Not downloading.")
 
 
 def download_profile(profile_url):
-    # Download the JSON manifest
+    # Download the base JSON manifest
     json_dict = download_json_manifest(profile_url)
 
     # Extract profile info
     username = get_profile_info(json_dict)
+    cursor_pos = json_dict['graphql']['user']['edge_owner_to_timeline_media']['page_info']['end_cursor'].replace('=', '')
     # Print verbose information
     if args.verbose:
         print("[VERBOSE] Username: ", username)
 
-    # Start cycling through media
-    media = json_dict['graphql']['user']['edge_owner_to_timeline_media']['edges']
+    # Extract all profile photos
     no_of_posts = json_dict['graphql']['user']['edge_owner_to_timeline_media']['count']
+    new_url = f"https://www.instagram.com/graphql/query/?query_hash=02e14f6a7812a876f7d133c9555b1151&variables=%7B%22id%22%3A%2229364142936%22%2C%22first%22%3A{no_of_posts}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D"
+    if args.verbose:
+        print("[VERBOSE] New URL: ", new_url)
+    json_dict = download_json_manifest(new_url)
+
+    # Start cycling through media
+    media = json_dict['data']['user']['edge_owner_to_timeline_media']['edges']
+    # Move to next cursor position
     for post in range(len(media)):
         shortcode = media[post]['node']['shortcode']
         # Download as a post
@@ -182,13 +193,13 @@ def download_profile(profile_url):
 def url_sorter(url):
     if "www.instagram.com/p/" in url:
         # This is an instagram post
-        post_json = url + '?__a=1'  # Update the URL to get the JSON manifest
+        post_json = url.replace("\n", "") + '?__a=1'  # Update the URL to get the JSON manifest
         download_post(post_json)
         if args.verbose:
             print("\n[VERBOSE] JSON URL:", post_json)
     elif check_for_profile_url(url):
         # URL is a profile
-        profile_json = url + '?__a=1'  # Update the URL to get the JSON manifest
+        profile_json = url.replace("\n", "") + '?__a=1'  # Update the URL to get the JSON manifest
         download_profile(profile_json)
         if args.verbose:
             print("\n[VERBOSE] JSON URL:", profile_json)
