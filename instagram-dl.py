@@ -159,10 +159,10 @@ def download_post(post_url):
             print("[VERBOSE] Downloading from:", unique_urls[i])
         if not Path(output_file).exists():
             retries = 0
-            while retries <= 5:
+            while retries <= 10:
                 try:
                     wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
-                    retries = 5
+                    retries = 11
                 except socket.gaierror:
                     time.sleep(1)
                     retries += 1
