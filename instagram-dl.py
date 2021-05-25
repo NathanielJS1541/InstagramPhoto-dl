@@ -156,12 +156,12 @@ def download_post(post_url):
             print("\n[VERBOSE] Filename:", output_file)
             print("[VERBOSE] Downloading from:", unique_urls[i])
         if not Path(output_file).exists():
-            if args.time:
-                time.sleep(args.time)
             wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
             print()
         else:
             print(f"[WARN] {output_file} already exists. Not downloading.")
+        if args.time:
+            time.sleep(args.time)
 
 
 def download_profile(profile_url):
@@ -172,6 +172,7 @@ def download_profile(profile_url):
     username = get_profile_info(json_dict)
     cursor_pos = json_dict['graphql']['user']['edge_owner_to_timeline_media']['page_info']['end_cursor'].replace(
         '=', '')
+    user_id = json_dict['graphql']['user']['id']
     # Print verbose information
     if args.verbose:
         print("[VERBOSE] Username: ", username)
@@ -179,7 +180,7 @@ def download_profile(profile_url):
     # Extract all profile photos
     no_of_posts = json_dict['graphql']['user']['edge_owner_to_timeline_media']['count']
     new_url = f"https://www.instagram.com/graphql/query/?query_hash=02e14f6a7812a876f7d133c9555b1151&variables=%7B" \
-              f"%22id%22%3A%2229364142936%22%2C%22first%22%3A{no_of_posts}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D"
+              f"%22id%22%3A%22{user_id}%22%2C%22first%22%3A{no_of_posts}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D"
     if args.verbose:
         print("[VERBOSE] New URL: ", new_url)
     json_dict = download_json_manifest(new_url)
@@ -202,27 +203,38 @@ def download_saved(saved_url):
     # Extract profile info
     no_of_saved = json_dict['graphql']['user']['edge_saved_media']['count']
     cursor_pos = json_dict['graphql']['user']['edge_saved_media']['page_info']['end_cursor'].replace('=', '')
+    has_next_page = json_dict['graphql']['user']['edge_saved_media']['page_info']['has_next_page']
+    user_id = json_dict['graphql']['user']['id']
     if args.verbose:
         print("[VERBOSE] Saved Photos:", no_of_saved)
         print("[VERBOSE] Cursor Position:", cursor_pos)
 
     # Get full list of saved posts
-    new_url = f"https://www.instagram.com/graphql/query/?query_hash=2ce1d673055b99250e93b6f88f878fde&variables=%7B" \
-              f"%22id%22%3A%2247896371744%22%2C%22first%22%3A{no_of_saved}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D "
+    total_on_pages = 0
+    while total_on_pages < no_of_saved:
+        new_url = f"https://www.instagram.com/graphql/query/?query_hash=2ce1d673055b99250e93b6f88f878fde&variables=%7B" \
+                  f"%22id%22%3A%22{user_id}%22%2C%22first%22%3A{no_of_saved}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D "
 
-    if args.verbose:
-        print("[VERBOSE] New URL: ", new_url)
-    json_dict = download_json_manifest(new_url)
-
-    # Start cycling through media
-    media = json_dict['data']['user']['edge_saved_media']['edges']
-    # Move to next cursor position
-    for post in range(len(media)):
-        shortcode = media[post]['node']['shortcode']
-        # Download as a post
-        url_sorter("https://www.instagram.com/p/" + shortcode + "/")
         if args.verbose:
-            print("[VERBOSE] Post URL: " + "https://www.instagram.com/p/" + shortcode + "/")
+            print("[VERBOSE] New URL: ", new_url)
+        json_dict = download_json_manifest(new_url)
+
+        # Start cycling through media
+        media = json_dict['data']['user']['edge_saved_media']['edges']
+        total_on_pages += len(media)
+        print(f"[INFO] Loaded {total_on_pages} out of {no_of_saved} posts")
+        # Move to next cursor position
+        for post in range(len(media)):
+            shortcode = media[post]['node']['shortcode']
+            # Download as a post
+            url_sorter("https://www.instagram.com/p/" + shortcode + "/")
+            if args.verbose:
+                print("[VERBOSE] Post URL: " + "https://www.instagram.com/p/" + shortcode + "/")
+        if has_next_page == "true":
+            cursor_pos = json_dict['data']['user']['edge_saved_media']['page_info']['end_cursor'].replace('=', '')
+            has_next_page = json_dict['data']['user']['edge_saved_media']['page_info']['has_next_page']
+            if args.verbose:
+                print("[VERBOSE] Cursor Position:", cursor_pos)
 
 
 def url_sorter(url):
