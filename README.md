@@ -38,19 +38,22 @@ clone https://github.com/NathanielJS1541/InstagramPhoto-dl.git`. Once this finis
 be configured to launch this whenever it encounters an instagram URL.
 ## Usage
 ```
-usage: instagram-dl.py [-h] [-c COOKIEFILE] [-s] [-o OUTPUT] [-v] URL
+usage: instagram-dl.py [-h] [-b BATCH_FILE] [-c COOKIEFILE] [-s] [-o OUTPUT_TEMPLATE] [-v] [URL]
 
 positional arguments:
-  URL                   The URL from the instagram post you wish to download
+  URL                   The URL from the instagram post or profile you wish to download (default: None)
 
 optional arguments:
   -h, --help            show this help message and exit
+  -b BATCH_FILE, --batch-file BATCH_FILE
+                        Path to a file containing multiple URLs to download from (default: None)
   -c COOKIEFILE, --cookies COOKIEFILE
-                        Path to cookies.txt file (Netscape cookie file format)
-  -s, --single          Download only the first photo that appears in the URL. Disabled by default.
-  -o OUTPUT, --output OUTPUT
-                        Output Folder
-  -v, --verbose         Print verbose messages
+                        Path to cookies.txt file (Netscape cookie file format) (default: None)
+  -s, --single          Download only the first photo that appears in the URL. Disabled by default. (default: False)
+  -o OUTPUT_TEMPLATE, --output-template OUTPUT_TEMPLATE
+                        Output Template, in 'new Style' Python String Formatting (default: ./Instagram/{creator}/{creator}-{date}-{id}.{ext})
+  -v, --verbose         Print verbose messages (default: False)
+
 
 ```
 ### Using Cookies
@@ -65,6 +68,25 @@ python ./instagram-dl.py -c ~/Documents/cookies.txt [URL]
 ```
 The credentials in the cookies.txt file will expire, but you can always just save a new one and replace the old one.
 
+### Using Batch Files
+A batch file is a plaintext file (such as a simple .txt) which contains one URL per line to download. This can then be
+imported into the script using `-b DownloadList.txt` or `--batch-file DownloadList.txt`. Note that this is used instead
+of the URL argument.
+
+### Using Templates
+The "Templates" feature was added to try and mimic the template functionality of 
+[youtube-dl](https://github.com/ytdl-org/youtube-dl): You are able to specify fields within the output format that will
+be automatically filled in by the script. By default, this is set to `./Instagram/{creator}/{creator}-{date}-{id}.{ext}`
+as a suggestion to prevent post names from clashing with each other. For those wondering this simply uses
+[new-style Python string formatting](https://realpython.com/python-string-formatting/). Not very robust but is "good
+enough". These can be used to name folders or just the file itself as seen in the default case.
+
+#### Currently Supported Template options
+- `{creator}` will be replaced with the username of the profile that made the post
+- `{date}` will be replaced with the date that the post was made on in the format `YYYY-MM-DD`
+- `{id}` will be replaced with the unique ID of the post (Note this is NOT the shortcode that shows up in the URL)
+- `{ext}` will be replaced with the file extension
+
 ## Not Working Yet / WIP
 - Currently my termux-url-opener script can't distinguish between instagram photos and instagram videos. So either this
   script needs to learn to download videos too, or just pass the task on to youtube-dl.
@@ -72,5 +94,5 @@ The credentials in the cookies.txt file will expire, but you can always just sav
   smoothly
 - Need to add the ability to fall back to username/password authentication in the case a user doesn't want to use
   cookies, or the cookie is invalid.
-- Should probably try to access the page regardless of whether cookies have been parsed first, if the page doesn't
-  require authentication why bother providing it?
+- Need to preload cookies if provided instead of loading them each time a URL is accessed to speed up the program
+- Need to figure out how to move the cursor to download an entire profile rather than just the first 12 posts.

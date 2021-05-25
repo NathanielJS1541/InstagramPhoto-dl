@@ -200,7 +200,7 @@ def url_sorter(url):
 # Get Input Arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 inputURL = parser.add_mutually_exclusive_group(required=True)
-inputURL.add_argument("URL", help="The URL from the instagram post you wish to download", nargs='?', type=str)
+inputURL.add_argument("URL", help="The URL from the instagram post or profile you wish to download", nargs='?', type=str)
 inputURL.add_argument("-b", "--batch-file", help="Path to a file containing multiple URLs to download from")
 parser.add_argument("-c", "--cookies", dest="cookieFile", help="Path to cookies.txt file (Netscape cookie file format)",
                     type=str)
