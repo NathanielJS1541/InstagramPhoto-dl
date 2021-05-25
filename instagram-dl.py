@@ -5,6 +5,7 @@ import wget
 import argparse
 from pathlib import Path
 import datetime
+import fileinput
 
 # Constants
 DEFAULT_TEMPLATE = "./Instagram/{creator}/{creator}-{date}-{id}.{ext}"
@@ -30,11 +31,11 @@ def check_status_code(status):
         print("[WARN] requests.get returned unknown status code: ", status, " Continuing anyway.")
 
 
-def download_json_manifest():
+def download_json_manifest(json_url):
     try:
         # Try loading JSON without logging in
-        check_status_code(requests.get(jsonURL).status_code)
-        json_dict = json.loads(requests.get(jsonURL).content)
+        check_status_code(requests.get(json_url).status_code)
+        json_dict = json.loads(requests.get(json_url).content)
         print("[INFO] Access granted without login. Continuing.")
     except ConnectionRefusedError:
         # Import cookies to avoid the need to login and load JSON
@@ -42,41 +43,78 @@ def download_json_manifest():
             print("[INFO] Login required. Loading cookie file.")
             cookies_file = http.cookiejar.MozillaCookieJar(args.cookieFile)
             cookies_file.load()
-            check_status_code(requests.get(jsonURL, cookies=cookies_file).status_code)
-            json_dict = json.loads(requests.get(jsonURL, cookies=cookies_file).content)
+            check_status_code(requests.get(json_url, cookies=cookies_file).status_code)
+            json_dict = json.loads(requests.get(json_url, cookies=cookies_file).content)
         else:
             raise
     return json_dict
 
 
-def get_post_info():
-    user = jsonDict['graphql']['shortcode_media']['owner']['username']
-    date = datetime.datetime.fromtimestamp(jsonDict['graphql']['shortcode_media']
+def check_for_profile_url(url):
+    test_json = url + '?__a=1'
+    test_json = download_json_manifest(test_json)
+    user = test_json['graphql']['user']['username']
+    if "www.instagram.com/" + user in url:
+        # This is a profile URL
+        return True
+    else:
+        return False
+
+
+def get_post_info(json_dict):
+    user = json_dict['graphql']['shortcode_media']['owner']['username']
+    date = datetime.datetime.fromtimestamp(json_dict['graphql']['shortcode_media']
                                            ['taken_at_timestamp']).strftime('%Y-%m-%d')
     return user, date
 
 
-def download_multiple_photos(unique_urls, unique_ids, unique_exts):
+def get_profile_info(json_dict):
+    user = json_dict['graphql']['user']['username']
+    return user
+
+
+def get_media_url(json_dict):
+    if json_dict['__typename'] == 'GraphImage':
+        # Post is a picture post
+        focus_url = json_dict['display_resources']
+        post_url = focus_url[len(focus_url) - 1]['src']  # The last entry in the JSON will be the highest resolution
+    elif json_dict['__typename'] == 'GraphVideo':
+        # Post is a video post
+        post_url = json_dict['video_url']
+    elif json_dict['__typename'] == 'GraphSidecar':
+        if json_dict['is_video']:
+            post_url = json_dict['edge_sidecar_to_children']['edges'][0]['node']['video_url']
+        else:
+            post_url = json_dict['edge_sidecar_to_children']['edges'][0]['node']['display_url']
+    else:
+        if args.verbose:
+            print("[VERBOSE] JSON dictionary returned __typename:", json_dict['__typename'])
+        raise ValueError("[ERR] Post media type was not understood.")
+    return post_url
+
+
+def get_multiple_post_urls(json_dict, unique_urls, unique_ids, unique_exts):
     try:
         # If -s was specified, skip this code
         if not args.single:
-            children_url = jsonDict['graphql']['shortcode_media']['edge_sidecar_to_children']['edges']
+            children_url = json_dict['graphql']['shortcode_media']['edge_sidecar_to_children']['edges']
             print("[INFO]: Multiple Photos Found: Downloading All.")
             no_of_children = len(children_url)
             # Cycle through children URLs
             for c in range(no_of_children):
-                if children_url[c]['node']['display_url'] not in uniqueURLs:
-                    child_url = children_url[c]['node']['display_resources']
-                    unique_urls.append(child_url[len(child_url) - 1]['src'])
+                media_url = get_media_url(children_url[c]['node'])
+                if media_url not in unique_urls:
+                    unique_urls.append(media_url)
                     unique_ids.append(children_url[c]['node']['id'])
-                    unique_exts.append(child_url[len(child_url) - 1]['src'].split('?', )[0].split('.')[-1])
+                    unique_exts.append(media_url.split('?', )[0].split('.')[-1])
     except KeyError:
-        print("[INFO]: Only One Photo Found. Downloading.")
+        print("[INFO] Only One Photo Found. Downloading.")
     return unique_urls, unique_ids, unique_exts
 
 
-def construct_output():
-    output_file = args.output_template.format(creator=username, date=timestamp, id=uniqueIDs[i], ext=uniqueExts[i])
+def construct_output(username, timestamp, unique_ids, unique_exts, url_no):
+    output_file = args.output_template.format(creator=username, date=timestamp, id=unique_ids[url_no],
+                                              ext=unique_exts[url_no])
     output_path = output_file.split('/')
     output_path = Path('/'.join(output_path[0:len(output_path) - 1]))
 
@@ -84,12 +122,86 @@ def construct_output():
     if not output_path.is_dir():
         output_path.mkdir(parents=True)
 
-    return output_file, output_path
+    return output_file
+
+
+def download_post(post_url):
+    # Download the JSON manifest
+    json_dict = download_json_manifest(post_url)
+
+    # Extract post info
+    username, timestamp = get_post_info(json_dict)
+
+    # Print verbose information
+    if args.verbose:
+        print("[VERBOSE] Username: ", username)
+        print("[VERBOSE] Date taken: ", timestamp)
+
+    # Extract post URLs, IDs and Extensions
+    unique_urls = [get_media_url(json_dict['graphql']['shortcode_media'])]
+    unique_ids = [json_dict['graphql']['shortcode_media']['id']]
+    unique_exts = [unique_urls[0].split('?', )[0].split('.')[-1]]
+
+    # Check for multiple media in the same post
+    unique_urls, unique_ids, unique_exts = get_multiple_post_urls(json_dict, unique_urls, unique_ids, unique_exts)
+
+    # Download the pictures from the URLs
+    for i in range(len(unique_urls)):
+        # Construct output file from template
+        output_file = construct_output(username, timestamp, unique_ids, unique_exts, i)
+        if args.verbose:
+            print("\n[VERBOSE] Filename:", output_file)
+            print("[VERBOSE] Downloading from:", unique_urls[i])
+        if not Path(output_file).exists():
+            wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
+        else:
+            print(f"[WARN] {output_file} already exists. Not downloading.")
+
+
+def download_profile(profile_url):
+    # Download the JSON manifest
+    json_dict = download_json_manifest(profile_url)
+
+    # Extract profile info
+    username = get_profile_info(json_dict)
+    # Print verbose information
+    if args.verbose:
+        print("[VERBOSE] Username: ", username)
+
+    # Start cycling through media
+    media = json_dict['graphql']['user']['edge_owner_to_timeline_media']['edges']
+    no_of_posts = json_dict['graphql']['user']['edge_owner_to_timeline_media']['count']
+    for post in range(len(media)):
+        shortcode = media[post]['node']['shortcode']
+        # Download as a post
+        url_sorter("https://www.instagram.com/p/" + shortcode + "/")
+        if args.verbose:
+            print("[VERBOSE] Post URL: " + "https://www.instagram.com/p/" + shortcode + "/")
+
+
+def url_sorter(url):
+    if "www.instagram.com/p/" in url:
+        # This is an instagram post
+        post_json = url + '?__a=1'  # Update the URL to get the JSON manifest
+        download_post(post_json)
+        if args.verbose:
+            print("\n[VERBOSE] JSON URL:", post_json)
+    elif check_for_profile_url(url):
+        # URL is a profile
+        profile_json = url + '?__a=1'  # Update the URL to get the JSON manifest
+        download_profile(profile_json)
+        if args.verbose:
+            print("\n[VERBOSE] JSON URL:", profile_json)
+    else:
+        # URL not implemented yet... panic!
+        raise ValueError("[ERR] This type of URL has not been implemented yet!")
 
 
 # Get Input Arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("URL", help="The URL from the instagram post you wish to download", type=str)
+inputURL = parser.add_mutually_exclusive_group(required=True)
+inputURL.add_argument("URL", help="The URL from the instagram post you wish to download", nargs='?', type=str)
+inputURL.add_argument("-b", "--batch-file", help="Path to a file containing multiple URLs to download from")
 parser.add_argument("-c", "--cookies", dest="cookieFile", help="Path to cookies.txt file (Netscape cookie file format)",
                     type=str)
 parser.add_argument("-s", "--single",
@@ -104,43 +216,15 @@ args = parser.parse_args()
 if args.cookieFile:
     if not Path(args.cookieFile).exists():
         raise FileNotFoundError("[ERR] The cookie file specified does not exist.")
+if args.batch_file:
+    if not Path(args.batch_file).exists():
+        raise FileNotFoundError("[ERR] The batch file specified does not exist.")
 if args.output_template == DEFAULT_TEMPLATE:
     print("[INFO] Outputting to script directory using default template:", DEFAULT_TEMPLATE)
 
 # Target URL
-jsonURL = args.URL + '?__a=1'  # Update the URL to get the JSON manifest
-if args.verbose:
-    print("[VERBOSE] JSON URL:", jsonURL)
-
-# Download the JSON manifest
-jsonDict = download_json_manifest()
-
-# Extract post info
-username, timestamp = get_post_info()
-
-# Print verbose information
-if args.verbose:
-    print("[VERBOSE] Username: ", username)
-    print("[VERBOSE] Date taken: ", timestamp)
-
-# Extract picture URLs, IDs and Extensions
-focusURL = jsonDict['graphql']['shortcode_media']['display_resources']
-uniqueURLs = [focusURL[len(focusURL) - 1]['src']]  # The last entry in the JSON will be the highest resolution
-uniqueIDs = [jsonDict['graphql']['shortcode_media']['id']]
-uniqueExts = [uniqueURLs[0].split('?', )[0].split('.')[-1]]
-
-# Check for multiple photos in the same post
-uniqueURLs, uniqueIDs, uniqueExts = download_multiple_photos(uniqueURLs, uniqueIDs, uniqueExts)
-
-# Download the pictures from the URLs
-for i in range(len(uniqueURLs)):
-    # Construct output file from template
-    outputFile, outputPath = construct_output()
-
-    if args.verbose:
-        print("[VERBOSE] Filename:", outputFile)
-        print("[VERBOSE] Downloading from:", uniqueURLs[i])
-    if not Path(outputFile).exists():
-        wget.download(uniqueURLs[i], out=outputFile)    # Only download if it doesn't already exist
-    else:
-        print(f"[WARN] {outputFile} already exists. Not downloading.")
+if args.batch_file:
+    for lines in fileinput.input(args.batch_file):
+        url_sorter(lines)
+else:
+    url_sorter(args.URL)
