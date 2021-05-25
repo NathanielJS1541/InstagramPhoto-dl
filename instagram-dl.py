@@ -1,3 +1,5 @@
+import socket
+
 import requests
 import json
 import http.cookiejar
@@ -156,7 +158,15 @@ def download_post(post_url):
             print("\n[VERBOSE] Filename:", output_file)
             print("[VERBOSE] Downloading from:", unique_urls[i])
         if not Path(output_file).exists():
-            wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
+            retries = 0
+            while retries <= 5:
+                try:
+                    wget.download(unique_urls[i], out=output_file)  # Only download if it doesn't already exist
+                    retries = 5
+                except socket.gaierror:
+                    time.sleep(1)
+                    retries += 1
+                    print("[INFO] Socket Error. Retrying...")
             print()
         else:
             print(f"[WARN] {output_file} already exists. Not downloading.")
