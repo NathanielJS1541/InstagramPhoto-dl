@@ -184,7 +184,9 @@ def download_media(media):
 
 
 def get_next_page(has_next_page, page_info):
-    if has_next_page == "true":
+    if args.verbose:
+        print("[VERBOSE] Has Next Page:", type(has_next_page), has_next_page)
+    if has_next_page:
         cursor_pos = page_info['end_cursor'].replace('=', '')
         has_next_page = page_info['has_next_page']
         if args.verbose:
@@ -208,17 +210,26 @@ def download_profile(profile_url):
     # Print verbose information
     if args.verbose:
         print("[VERBOSE] Username: ", username)
+        print("[VERBOSE] Number of posts:", no_of_posts)
+        print("[VERBOSE] Cursor Position:", cursor_pos)
 
     total_on_pages = 0
     # Initial page media
     media = json_dict['graphql']['user']['edge_owner_to_timeline_media']['edges']
+    if args.verbose:
+        print("[VERBOSE] Initial media URL: ", media)
     download_media(media)
     total_on_pages += len(media)
 
     # Get full list of saved posts
     while total_on_pages < no_of_posts:
-        new_url = f"https://www.instagram.com/graphql/query/?query_hash=02e14f6a7812a876f7d133c9555b1151&variables=%7B" \
-                  f"%22id%22%3A%22{user_id}%22%2C%22first%22%3A{no_of_posts}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D"
+        if no_of_posts - total_on_pages > 50:
+            next_get_amount = 50
+        else:
+            next_get_amount = no_of_posts - total_on_pages
+        new_url = f"https://www.instagram.com/graphql/query/?query_hash=02e14f6a7812a876f7d133c9555b1151&variables" \
+                  f"=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{next_get_amount}%2C%22afte" \
+                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7Dw"
         if args.verbose:
             print("[VERBOSE] New URL: ", new_url)
         json_dict = download_json_manifest(new_url)
@@ -241,7 +252,8 @@ def download_saved(saved_url):
     has_next_page = json_dict['graphql']['user']['edge_saved_media']['page_info']['has_next_page']
     user_id = json_dict['graphql']['user']['id']
     if args.verbose:
-        print("[VERBOSE] Saved Photos:", no_of_saved)
+        print("[VERBOSE] User ID: ", user_id)
+        print("[VERBOSE] Number of posts:", no_of_saved)
         print("[VERBOSE] Cursor Position:", cursor_pos)
 
     total_on_pages = 0
@@ -254,8 +266,13 @@ def download_saved(saved_url):
 
     # Get full list of saved posts
     while total_on_pages < no_of_saved:
-        new_url = f"https://www.instagram.com/graphql/query/?query_hash=2ce1d673055b99250e93b6f88f878fde&variables=%7B" \
-                  f"%22id%22%3A%22{user_id}%22%2C%22first%22%3A{no_of_saved}%2C%22after%22%3A%22{cursor_pos}%3D%3D%22%7D"
+        if no_of_saved - total_on_pages > 50:
+            next_get_amount = 50
+        else:
+            next_get_amount = no_of_saved - total_on_pages
+        new_url = f"https://www.instagram.com/graphql/query/?query_hash=2ce1d673055b99250e93b6f88f878fde&variables" \
+                  f"=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{next_get_amount}%2C%22afte" \
+                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7D "
 
         if args.verbose:
             print("[VERBOSE] New URL: ", new_url)
@@ -274,20 +291,14 @@ def url_sorter(url):
         # This is an instagram post
         post_json = url.replace("\n", "") + '?__a=1'  # Update the URL to get the JSON manifest
         download_post(post_json)
-        if args.verbose:
-            print("\n[VERBOSE] JSON URL:", post_json)
     elif "https://www.instagram.com/" in url and "/saved/" in url:
         # This is the user's saved photos
         saved_url = url.replace("\n", "") + '?__a=1'  # Update the URL to get the JSON manifest
         download_saved(saved_url)
-        if args.verbose:
-            print("\n[VERBOSE] JSON URL:", saved_url)
     elif check_for_profile_url(url):
         # URL is a profile
         profile_json = url.replace("\n", "") + '?__a=1'  # Update the URL to get the JSON manifest
         download_profile(profile_json)
-        if args.verbose:
-            print("\n[VERBOSE] JSON URL:", profile_json)
     else:
         # URL not implemented yet... panic!
         raise ValueError("[ERR] This type of URL has not been implemented yet!")
