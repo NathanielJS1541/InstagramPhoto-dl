@@ -246,7 +246,9 @@ def download_saved(saved_url):
 
     total_on_pages = 0
     # Initial page media
-    media = json_dict['graphql']['user']['edge_owner_to_timeline_media']['edges']
+    media = json_dict['graphql']['user']['edge_saved_media']['edges']
+    if args.verbose:
+        print("[VERBOSE] Initial media URL:", saved_url)
     download_media(media)
     total_on_pages += len(media)
 
