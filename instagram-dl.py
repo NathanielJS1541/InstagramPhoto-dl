@@ -229,7 +229,7 @@ def download_profile(profile_url):
             next_get_amount = no_of_posts - total_on_pages
         new_url = f"https://www.instagram.com/graphql/query/?query_hash=02e14f6a7812a876f7d133c9555b1151&variables" \
                   f"=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{next_get_amount}%2C%22afte" \
-                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7Dw"
+                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7D"
         if args.verbose:
             print("[VERBOSE] New URL: ", new_url)
         json_dict = download_json_manifest(new_url)
@@ -272,7 +272,7 @@ def download_saved(saved_url):
             next_get_amount = no_of_saved - total_on_pages
         new_url = f"https://www.instagram.com/graphql/query/?query_hash=2ce1d673055b99250e93b6f88f878fde&variables" \
                   f"=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{next_get_amount}%2C%22afte" \
-                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7D "
+                  f"r%22%3A%22{cursor_pos}%3D%3D%22%7D"
 
         if args.verbose:
             print("[VERBOSE] New URL: ", new_url)
